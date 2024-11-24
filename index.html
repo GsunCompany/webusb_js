@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Web Serial Terminal</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background-color: #f4f4f4;
+    }
+    #output {
+      width: 100%;
+      height: 200px;
+      background: #000;
+      color: #00FF00;
+      font-family: monospace;
+      overflow-y: scroll;
+      padding: 10px;
+    }
+    #input {
+      width: 100%;
+      padding: 10px;
+      font-family: monospace;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Web Serial Terminal</h1>
+  <button id="connectButton">Connect to Serial Device</button>
+  <div id="output"></div>
+  <textarea id="input" rows="3" placeholder="Type your command here..."></textarea>
+  <button id="sendButton">Send</button>
+
+  <script>
+    let port;
+    let reader;
+    let writer;
+
+    // Get references to HTML elements
+    const outputElement = document.getElementById('output');
+    const inputElement = document.getElementById('input');
+    const connectButton = document.getElementById('connectButton');
+    const sendButton = document.getElementById('sendButton');
+
+    // Connect to serial device when the "Connect" button is clicked
+    connectButton.addEventListener('click', async () => {
+      try {
+        // Request a port and open it
+        port = await navigator.serial.requestPort();
+        await port.open({ baudRate: 9600 });
+
+        // Get the reader and writer
+        const decoder = new TextDecoderStream();
+        const writerStream = port.writable.getWriter();
+        const readerStream = port.readable.getReader();
+        reader = readerStream;
+        writer = writerStream;
+
+        // Start reading from the serial port
+        readFromPort();
+        connectButton.disabled = true;
+        console.log("Connected to serial port");
+
+      } catch (err) {
+        console.error("Failed to open serial port:", err);
+      }
+    });
+
+    // Read data from the serial port
+    async function readFromPort() {
+      const decoder = new TextDecoderStream();
+      const readableStreamClosed = port.readable.pipeTo(decoder.writable);
+      const streamReader = decoder.readable.getReader();
+
+      try {
+        while (true) {
+          const { value, done } = await streamReader.read();
+          if (done) {
+            break;
+          }
+          outputElement.textContent += value;
+          outputElement.scrollTop = outputElement.scrollHeight; // Scroll to the bottom
+        }
+      } catch (err) {
+        console.error("Error reading from port:", err);
+      }
+    }
+
+    // Send data to the serial port when the "Send" button is clicked
+    sendButton.addEventListener('click', async () => {
+      if (port && writer) {
+        const data = inputElement.value;
+        const encoder = new TextEncoder();
+        writer.write(encoder.encode(data));
+        inputElement.value = ''; // Clear input field after sending
+      }
+    });
+
+    // Close the serial port when the page is unloaded
+    window.addEventListener('unload', async () => {
+      if (port) {
+        await port.close();
+      }
+    });
+  </script>
+
+</body>
+</html>
